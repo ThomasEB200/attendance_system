@@ -1,5 +1,0 @@
-ai-edge-litert         # TFLite runtime — replaces tflite-runtime for Python 3.11+
-picamera2              # Pi camera capture (pre-installed on Raspberry Pi OS)
-Pillow>=10.0
-numpy>=1.26
-requests>=2.31
