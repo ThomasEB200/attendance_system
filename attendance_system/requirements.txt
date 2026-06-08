@@ -1,0 +1,9 @@
+# Install: pip install -r requirements.txt
+# Note: opencv và picamera2 cài riêng qua apt (xem flow bên dưới)
+
+ai-edge-litert     # TFLite runtime cho Python 3.11+ trên ARM64
+flask>=3.0
+numpy>=1.26
+Pillow>=10.0
+pyyaml>=6.0
+requests>=2.31

@@ -1,0 +1,27 @@
+camera:
+  width: 320
+  height: 240
+  # Set to 0 for USB webcam on PC; ignored on Pi (picamera2 is used)
+  cv2_device_index: 0
+
+detection:
+  model_path: "detection/models/face_detection.tflite"
+  confidence_threshold: 0.6
+  min_face_size_px: 60
+  stable_frames_required: 3
+  # iou threshold for NMS
+  nms_iou_threshold: 0.3
+
+recognition:
+  model_path: "recognition/models/face_embedding.tflite"
+  known_faces_dir: "data/known_faces"
+  embeddings_path: "data/embeddings.pkl"
+  similarity_threshold: 0.65
+  low_confidence_threshold: 0.60
+
+debug:
+  show_window: true
+  window_name: "Attendance System — Debug"
+  log_latency: true
+  log_level: "DEBUG"
+  
