@@ -3,6 +3,23 @@ camera:
   height: 240
   # Set to 0 for USB webcam on PC; ignored on Pi (picamera2 is used)
   cv2_device_index: 0
+  # ISP hardware controls — applied only when running on Pi with picamera2.
+  # These run on the camera ISP chip (free CPU cost), so prefer these over
+  # software enhance on Pi. On PC they are silently ignored.
+  isp_controls:
+    NoiseReductionMode: 2   # 0=off 1=fast 2=HighQuality — replaces software pre-blur
+    Sharpness: 1.5          # 0–16, default=1.0 — replaces software unsharp mask
+    ExposureValue: 0.0      # EV compensation: +0.5 if room is dim, -0.5 if too bright
+    Contrast: 1.1           # 0–32, default=1.0
+    AeEnable: true          # auto exposure — already default, explicit for clarity
+    AwbEnable: true         # auto white balance — already default
+
+enhance:
+  enabled: true
+  clahe_clip_limit: 1.5  # local contrast (1.0 = subtle, 3.0 = aggressive)
+  clahe_tile_grid: 8     # smaller tile = more local, larger = more global
+  sharpen_strength: 0.6  # 0 = off, 0.4–0.8 = phone-like, >1.0 = over-sharp
+  denoise: false         # bilateral filter — helps noisy cameras, adds ~10ms/frame
 
 detection:
   model_path: "detection/models/face_detection.tflite"
@@ -16,12 +33,12 @@ recognition:
   model_path: "recognition/models/face_embedding.tflite"
   known_faces_dir: "data/known_faces"
   embeddings_path: "data/embeddings.pkl"
-  similarity_threshold: 0.65
-  low_confidence_threshold: 0.60
+  similarity_threshold: 0.5
+  low_confidence_threshold: 0.4
 
 debug:
   show_window: true
   window_name: "Attendance System — Debug"
   log_latency: true
-  log_level: "DEBUG"
+  log_level: "INFO"  #INFO, DEBUG
   

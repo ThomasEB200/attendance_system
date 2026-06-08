@@ -226,7 +226,7 @@ class FaceDetector:
     def _decode_keypoints(self, raw_boxes: np.ndarray) -> np.ndarray:
         """
         Decode 6 facial keypoints from raw regressors.
-        BlazeFace bbox uses [y,x,h,w] but keypoints use [x,y] — different ordering.
+        BlazeFace boxes use [dy, dx, dh, dw] order, but keypoints use [kx, ky] (x first).
         Returns [896, 6, 2] in (y, x) normalized coords.
         """
         kps = []

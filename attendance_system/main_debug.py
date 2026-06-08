@@ -21,6 +21,7 @@ from camera.camera_manager import CameraManager
 from detection.face_detector import Detection, FaceDetector
 from recognition.face_db import FaceDB, MatchResult
 from recognition.face_recognizer import FaceRecognizer
+from utils.image_enhancer import ImageEnhancer
 from utils.logger import setup_logger
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def pipeline_loop(
     db: FaceDB,
     cfg: dict,
     stop_event: threading.Event,
+    enhancer: ImageEnhancer | None = None,
 ) -> None:
     global _latest_frame
 
@@ -112,6 +114,9 @@ def pipeline_loop(
         frame = cam.capture()
         if frame is None:
             continue
+
+        if enhancer is not None:
+            frame = enhancer.enhance(frame)
 
         t_det = time.perf_counter()
         detections = detector.detect(frame)
@@ -269,6 +274,20 @@ def main() -> None:
         low_confidence_threshold=rec_cfg.get("low_confidence_threshold", 0.60),
     )
 
+    enh_cfg = cfg.get("enhance", {})
+    enhancer: ImageEnhancer | None = None
+    if enh_cfg.get("enabled", False):
+        enhancer = ImageEnhancer(
+            clahe_clip_limit=enh_cfg.get("clahe_clip_limit", 2.0),
+            clahe_tile_grid=enh_cfg.get("clahe_tile_grid", 8),
+            sharpen_strength=enh_cfg.get("sharpen_strength", 0.6),
+            denoise=enh_cfg.get("denoise", False),
+        )
+        logger.info("Image enhancer enabled (clahe=%.1f sharpen=%.1f denoise=%s)",
+                    enh_cfg.get("clahe_clip_limit", 2.0),
+                    enh_cfg.get("sharpen_strength", 0.6),
+                    enh_cfg.get("denoise", False))
+
     logger.info("Starting camera...")
     stop_event = threading.Event()
 
@@ -276,10 +295,11 @@ def main() -> None:
         width=cam_cfg.get("width", 320),
         height=cam_cfg.get("height", 240),
         cv2_device_index=cam_cfg.get("cv2_device_index", 0),
+        isp_controls=cam_cfg.get("isp_controls"),
     ) as cam:
         pipeline_thread = threading.Thread(
             target=_pipeline_wrapper,
-            args=(cam, detector, recognizer, db, cfg, stop_event),
+            args=(cam, detector, recognizer, db, cfg, stop_event, enhancer),
             daemon=True,
         )
         pipeline_thread.start()

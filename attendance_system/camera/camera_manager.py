@@ -20,7 +20,13 @@ class CameraManager:
       - cv2.VideoCapture (USB/built-in cam) as fallback for PC development
     """
 
-    def __init__(self, width: int = 320, height: int = 240, cv2_device_index: int = 0):
+    def __init__(
+        self,
+        width: int = 320,
+        height: int = 240,
+        cv2_device_index: int = 0,
+        isp_controls: dict | None = None,
+    ):
         self._width = width
         self._height = height
 
@@ -31,6 +37,11 @@ class CameraManager:
             )
             self._cam.configure(cfg)
             self._cam.start()
+
+            if isp_controls:
+                self._cam.set_controls(isp_controls)
+                logger.info("picamera2 ISP controls applied: %s", isp_controls)
+
             logger.info("picamera2 started at %dx%d", width, height)
         else:
             self._cam = cv2.VideoCapture(cv2_device_index)
@@ -43,10 +54,10 @@ class CameraManager:
     def capture(self) -> np.ndarray | None:
         """
         Returns a BGR numpy array (H, W, 3), or None on failure.
-        Pi: picamera2 returns RGB888 → converted to BGR for cv2 consistency.
+        Pi: picamera2 RGB888 → needs cvtColor to BGR for cv2 consistency.
         """
         if _IS_PI:
-            # picamera2 RGB888 format returns BGR in memory (libcamera convention)
+            # picamera2 "RGB888" format stores pixels as BGR in memory (libcamera/V4L2 convention)
             return self._cam.capture_array()
 
         ok, frame = self._cam.read()

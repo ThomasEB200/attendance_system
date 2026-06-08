@@ -30,6 +30,7 @@ sys.path.insert(0, str(_ROOT))
 from detection.face_detector import FaceDetector
 from recognition.face_recognizer import FaceRecognizer
 from recognition.face_db import FaceDB
+from utils.image_enhancer import ImageEnhancer
 from utils.logger import setup_logger
 
 logger = logging.getLogger(__name__)
@@ -61,22 +62,38 @@ def load_image_exif(path: str) -> np.ndarray:
 
 
 def capture_from_camera(cfg: dict) -> np.ndarray | None:
-    """Warm up camera then capture a single frame."""
+    """Warm up camera, capture a single frame, and apply enhancement."""
     from camera.camera_manager import CameraManager
     import time
 
     cam_cfg = cfg.get("camera", {})
+    enh_cfg = cfg.get("enhance", {})
+
+    enhancer: ImageEnhancer | None = None
+    if enh_cfg.get("enabled", False):
+        enhancer = ImageEnhancer(
+            clahe_clip_limit=enh_cfg.get("clahe_clip_limit", 2.0),
+            clahe_tile_grid=enh_cfg.get("clahe_tile_grid", 8),
+            sharpen_strength=enh_cfg.get("sharpen_strength", 0.6),
+            denoise=enh_cfg.get("denoise", False),
+        )
+
     with CameraManager(
         width=cam_cfg.get("width", 320),
         height=cam_cfg.get("height", 240),
         cv2_device_index=cam_cfg.get("cv2_device_index", 0),
+        isp_controls=cam_cfg.get("isp_controls"),
     ) as cam:
         print("Warming up camera (2s)...")
         t0 = time.perf_counter()
         while time.perf_counter() - t0 < 2.0:
             cam.capture()
         print("Capturing...")
-        return cam.capture()
+        frame = cam.capture()
+
+    if frame is not None and enhancer is not None:
+        frame = enhancer.enhance(frame)
+    return frame
 
 
 def verify_self_similarity(
