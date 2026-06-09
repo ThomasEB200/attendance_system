@@ -1,10 +1,13 @@
 """
-Phase 1 debug entry point.
+Attendance system entry point.
 
-Serves a live MJPEG stream viewable in any browser:
-    http://<PI_IP>:5000
+Runs face detection + recognition and outputs annotated frames to:
+  - ILI9225 TFT display (when tft.enabled: true in config.yaml, Raspberry Pi only)
+  - MJPEG web stream   (always, or when tft.web_preview: true)
 
-Run from attendance_system/ directory:
+Web stream URL: http://<device_ip>:5000
+
+Run from attendance_system/:
     python main_debug.py
 """
 import logging
@@ -19,6 +22,7 @@ from flask import Flask, Response
 
 from camera.camera_manager import CameraManager
 from detection.face_detector import Detection, FaceDetector
+from display.tft_display import TFTDisplay, is_available as tft_available, tft_stream_loop
 from recognition.face_db import FaceDB, MatchResult
 from recognition.face_recognizer import FaceRecognizer
 from utils.image_enhancer import ImageEnhancer
@@ -26,7 +30,7 @@ from utils.logger import setup_logger
 
 logger = logging.getLogger(__name__)
 
-# BGR colors
+# BGR overlay colors
 _COLOR_STABLE   = (0, 255, 255)   # yellow
 _COLOR_MATCH    = (0, 255, 0)     # green
 _COLOR_UNKNOWN  = (0, 0, 255)     # red
@@ -36,7 +40,7 @@ _FONT       = cv2.FONT_HERSHEY_SIMPLEX
 _FONT_SCALE = 0.55
 _THICKNESS  = 1
 
-# Shared state between pipeline thread and Flask thread
+# Shared state: pipeline thread writes, output threads read
 _frame_lock   = threading.Lock()
 _latest_frame: np.ndarray | None = None
 
@@ -65,7 +69,7 @@ def draw_status_bar(frame: np.ndarray, text: str, color: tuple) -> None:
 
 
 # ------------------------------------------------------------------
-# Pipeline thread — runs detection + recognition, writes to _latest_frame
+# Pipeline thread — detection + recognition → _latest_frame
 # ------------------------------------------------------------------
 
 def _pipeline_wrapper(*args, **kwargs):
@@ -101,12 +105,12 @@ def pipeline_loop(
     if db.is_empty():
         logger.warning("Face DB is empty — enroll someone first")
 
-    logger.info("Warming up camera (2s)...")
+    logger.info("Warming up camera (2 s)...")
     warmup_start = time.perf_counter()
     while time.perf_counter() - warmup_start < 2.0:
         cam.capture()
 
-    logger.info("Pipeline running. Open http://<PI_IP>:5000 in browser.")
+    logger.info("Pipeline running.")
 
     while not stop_event.is_set():
         t0 = time.perf_counter()
@@ -189,6 +193,17 @@ def pipeline_loop(
 
 
 # ------------------------------------------------------------------
+# TFT output thread
+# ------------------------------------------------------------------
+
+def _tft_wrapper(*args, **kwargs):
+    try:
+        tft_stream_loop(*args, **kwargs)
+    except Exception:
+        logger.exception("TFT thread crashed")
+
+
+# ------------------------------------------------------------------
 # Flask MJPEG stream
 # ------------------------------------------------------------------
 
@@ -214,7 +229,7 @@ def _generate_mjpeg():
             + buf.tobytes()
             + b"\r\n"
         )
-        time.sleep(0.05)   # ~20fps cap
+        time.sleep(0.05)   # ~20 fps cap
 
 
 @app.route("/")
@@ -255,6 +270,7 @@ def main() -> None:
     det_cfg = cfg.get("detection", {})
     rec_cfg = cfg.get("recognition", {})
     cam_cfg = cfg.get("camera", {})
+    tft_cfg = cfg.get("tft", {})
 
     logger.info("Loading face detector...")
     detector = FaceDetector(
@@ -288,6 +304,36 @@ def main() -> None:
                     enh_cfg.get("sharpen_strength", 0.6),
                     enh_cfg.get("denoise", False))
 
+    # ------------------------------------------------------------------
+    # Optional TFT display init
+    # ------------------------------------------------------------------
+    tft: TFTDisplay | None = None
+    tft_active = False
+
+    if tft_cfg.get("enabled", False):
+        if not tft_available():
+            logger.warning(
+                "tft.enabled=true but tft_lib not importable "
+                "(spidev/RPi.GPIO absent — running on PC?). "
+                "Falling back to web stream only."
+            )
+        else:
+            try:
+                tft = TFTDisplay(
+                    dc_pin=tft_cfg.get("dc_pin", 25),
+                    rst_pin=tft_cfg.get("rst_pin", 27),
+                    bl_pin=tft_cfg.get("bl_pin", 18),
+                    scale_mode=tft_cfg.get("scale_mode", "fill"),
+                    spi_speed=tft_cfg.get("spi_speed", 16_000_000),
+                )
+                tft.show_splash("Attendance", "Starting...")
+                tft_active = True
+            except Exception as exc:
+                logger.warning("TFT init failed (%s) — falling back to web stream only.", exc)
+
+    # Run Flask when TFT is inactive, or when web_preview is explicitly requested
+    run_web = (not tft_active) or tft_cfg.get("web_preview", True)
+
     logger.info("Starting camera...")
     stop_event = threading.Event()
 
@@ -304,13 +350,43 @@ def main() -> None:
         )
         pipeline_thread.start()
 
+        if tft_active:
+            tft_thread = threading.Thread(
+                target=_tft_wrapper,
+                args=(
+                    lambda: _latest_frame,
+                    _frame_lock,
+                    tft,
+                    stop_event,
+                    float(tft_cfg.get("target_fps", 15)),
+                ),
+                daemon=True,
+            )
+            tft_thread.start()
+            logger.info("TFT stream thread started (target %.0f fps)", tft_cfg.get("target_fps", 15))
+
         try:
-            # Flask runs in main thread; pipeline runs in background
-            app.run(host="0.0.0.0", port=5000, threaded=True, use_reloader=False)
+            if run_web:
+                if tft_active:
+                    logger.info("Web preview active at http://<device_ip>:5000")
+                else:
+                    logger.info("Open http://<device_ip>:5000 in a browser.")
+                app.run(host="0.0.0.0", port=5000, threaded=True, use_reloader=False)
+            else:
+                # TFT-only mode: block main thread until Ctrl+C
+                logger.info("TFT-only mode. Press Ctrl+C to stop.")
+                while not stop_event.is_set():
+                    time.sleep(0.5)
         except KeyboardInterrupt:
             logger.info("Interrupted")
         finally:
             stop_event.set()
+            if tft is not None:
+                try:
+                    tft.show_splash("Stopped")
+                except Exception:
+                    pass
+                tft.cleanup()
 
     logger.info("Done.")
 

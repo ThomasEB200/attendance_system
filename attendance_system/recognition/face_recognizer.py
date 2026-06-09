@@ -13,16 +13,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# MediaPipe MobileNetV3 face embedder expects 112×112 RGB input
 _EMBED_INPUT_SIZE = (112, 112)
 
 
 class FaceRecognizer:
     """
-    Generates a 192-dim L2-normalized face embedding from a BGR face crop.
+    Generates a 128-dim L2-normalized face embedding from a BGR face crop.
 
-    Model: MobileFaceNet TFLite (float32, batch=2, input 112×112, output 192-dim)
+    Model: MediaPipe MobileNetV3 face embedder (float32, ~2MB TFLite)
     Input:  BGR numpy crop (any resolution) — will be resized + normalized internally
-    Output: 1-D numpy array, shape (192,), L2-normalized
+    Output: 1-D numpy array, shape (128,), L2-normalized
     """
 
     def __init__(self, model_path: str = "recognition/models/face_embedding.tflite"):
@@ -39,9 +40,9 @@ class FaceRecognizer:
 
     def embed(self, face_crop_bgr: np.ndarray) -> np.ndarray:
         """
-        Compute a 192-dim L2-normalized embedding for a face crop.
+        Compute a 128-dim L2-normalized embedding for a face crop.
         face_crop_bgr: BGR numpy array (H, W, 3), any resolution.
-        Returns: np.ndarray shape (192,)
+        Returns: np.ndarray shape (128,)
         """
         input_tensor = self._preprocess(face_crop_bgr)
         self._interpreter.set_tensor(self._input_idx, input_tensor)

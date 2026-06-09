@@ -41,4 +41,16 @@ debug:
   window_name: "Attendance System — Debug"
   log_latency: true
   log_level: "INFO"  #INFO, DEBUG
-  
+
+# ILI9225 TFT display (KMRTM2018-SPI V.1, 176×220)
+# Only active on Raspberry Pi where spidev + RPi.GPIO are available.
+# Set enabled: false when developing on PC.
+tft:
+  enabled: false            # true on Pi with TFT wired up
+  dc_pin:  25               # BCM GPIO for DC/RS line   (physical pin 22)
+  rst_pin: 27               # BCM GPIO for hardware RST (physical pin 13)
+  bl_pin:  18               # BCM GPIO for backlight    (physical pin 12)
+  scale_mode: fill          # fit | fill | stretch | none
+  target_fps: 15            # max push rate (SPI ceiling ~20 fps at 16 MHz)
+  spi_speed:  16000000      # SPI clock in Hz (ILI9225 max ~20 MHz)
+  web_preview: true         # also serve the Flask /stream while TFT is active

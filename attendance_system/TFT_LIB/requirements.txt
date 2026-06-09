@@ -1,0 +1,12 @@
+# TFT_LIB – Python dependencies for Raspberry Pi Zero 2W (Raspbian Bookworm)
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Note: spidev and RPi.GPIO are usually pre-installed on Raspbian.
+#       Enable SPI in raspi-config before use.
+
+spidev>=3.5          # Linux kernel SPI interface
+RPi.GPIO>=0.7.1      # GPIO control (pre-installed on Raspbian)
+Pillow>=9.0.0        # Image resize / JPEG decode for streaming
+numpy>=1.23.0        # Fast pixel format conversion (optional but recommended)
