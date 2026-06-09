@@ -1,0 +1,22 @@
+# Employee registry for LocalProvider (development / offline mode).
+#
+# For each employee:
+#   id    — unique employee ID used as the lookup key in FaceDB
+#   name  — display name shown on TFT and web stream
+#   photo — filename inside data/employee_source/  (3×4 portrait, face clearly visible)
+#
+# To add an employee:
+#   1. Copy their reference photo to data/employee_source/<filename>.jpg
+#   2. Add an entry below
+#   3. Restart main_debug.py  →  SyncManager detects the change and re-enrolls automatically
+#
+# When switching to Firebase, this file and data/employee_source/ are no longer used.
+
+employees:
+  - id: NV001
+    name: "Thai"
+    photo: "Thai.jpg"
+
+  - id: NV002
+    name: "Thanh"
+    photo: "Thanh.jpg"

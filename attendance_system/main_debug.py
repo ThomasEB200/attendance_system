@@ -20,11 +20,14 @@ import numpy as np
 import yaml
 from flask import Flask, Response
 
+from attendance.attendance_logger import AttendanceLogger
 from camera.camera_manager import CameraManager
 from detection.face_detector import Detection, FaceDetector
 from display.tft_display import TFTDisplay, is_available as tft_available, tft_stream_loop
 from recognition.face_db import FaceDB, MatchResult
 from recognition.face_recognizer import FaceRecognizer
+from sync.local_provider import LocalProvider
+from sync.sync_manager import SyncManager
 from utils.image_enhancer import ImageEnhancer
 from utils.logger import setup_logger
 
@@ -87,6 +90,7 @@ def pipeline_loop(
     cfg: dict,
     stop_event: threading.Event,
     enhancer: ImageEnhancer | None = None,
+    attendance_logger: AttendanceLogger | None = None,
 ) -> None:
     global _latest_frame
 
@@ -166,6 +170,8 @@ def pipeline_loop(
                     "Recognition: %s  conf=%.3f  matched=%s  det=%.0fms recog=%.0fms",
                     result.name, result.confidence, result.matched, det_ms, recog_ms,
                 )
+                if result.matched and attendance_logger is not None:
+                    attendance_logger.record_present(result.employee_id, result.name)
             else:
                 result = None
 
@@ -290,6 +296,54 @@ def main() -> None:
         low_confidence_threshold=rec_cfg.get("low_confidence_threshold", 0.60),
     )
 
+    # ------------------------------------------------------------------
+    # Sync: compare remote employee list with local manifest, re-enroll if changed
+    # ------------------------------------------------------------------
+    sync_cfg = cfg.get("sync", {})
+    if sync_cfg.get("enabled", False):
+        provider_name = sync_cfg.get("provider", "local")
+        provider = None
+
+        if provider_name == "local":
+            local_cfg = sync_cfg.get("local", {})
+            provider = LocalProvider(
+                data_dir=root / "data",
+                config_filename=local_cfg.get("employees_config", "employees.yaml"),
+                source_subdir=local_cfg.get("source_dir", "employee_source"),
+            )
+        elif provider_name == "firebase":
+            from sync.firebase_provider import FirebaseProvider
+            fb_cfg = sync_cfg.get("firebase", {})
+            cred_path = root / fb_cfg.get("credentials", "firebase_credentials.json")
+            provider = FirebaseProvider(credentials_path=str(cred_path))
+        else:
+            logger.warning("Unknown sync provider '%s' — sync skipped", provider_name)
+
+        if provider is not None:
+            sync_mgr = SyncManager(provider=provider, data_dir=root / "data")
+            logger.info("Running employee sync (provider=%s)...", provider_name)
+            try:
+                sync_mgr.sync_if_needed(detector, recognizer, db)
+            except Exception:
+                logger.exception("Sync failed — continuing with existing embeddings")
+
+    # ------------------------------------------------------------------
+    # Attendance logger — writes status: "present" to Firestore on match
+    # ------------------------------------------------------------------
+    cred_path = root / sync_cfg.get("firebase", {}).get(
+        "credentials", "firebase_credentials.json"
+    )
+    attendance_logger = AttendanceLogger(
+        credentials_path=str(cred_path) if cred_path.exists() else None,
+    )
+    att_cfg = cfg.get("attendance", {})
+    stop_event = threading.Event()
+    attendance_logger.start_daily_reset(
+        reset_hour=att_cfg.get("reset_hour", 5),
+        reset_minute=att_cfg.get("reset_minute", 0),
+        stop_event=stop_event,
+    )
+
     enh_cfg = cfg.get("enhance", {})
     enhancer: ImageEnhancer | None = None
     if enh_cfg.get("enabled", False):
@@ -335,8 +389,6 @@ def main() -> None:
     run_web = (not tft_active) or tft_cfg.get("web_preview", True)
 
     logger.info("Starting camera...")
-    stop_event = threading.Event()
-
     with CameraManager(
         width=cam_cfg.get("width", 320),
         height=cam_cfg.get("height", 240),
@@ -345,7 +397,7 @@ def main() -> None:
     ) as cam:
         pipeline_thread = threading.Thread(
             target=_pipeline_wrapper,
-            args=(cam, detector, recognizer, db, cfg, stop_event, enhancer),
+            args=(cam, detector, recognizer, db, cfg, stop_event, enhancer, attendance_logger),
             daemon=True,
         )
         pipeline_thread.start()

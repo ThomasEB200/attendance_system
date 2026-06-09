@@ -146,7 +146,7 @@ class FaceDetector:
         """
         h, w = frame.shape[:2]
 
-        input_tensor = self._preprocess(frame)
+        input_tensor, scale, pad_x, pad_y = self._preprocess(frame)
         self._interpreter.set_tensor(self._input_idx, input_tensor)
         self._interpreter.invoke()
 
@@ -164,10 +164,11 @@ class FaceDetector:
         detections = []
         for i in kept_indices:
             y1n, x1n, y2n, x2n = boxes[i]
-            x1 = max(0, int(x1n * w))
-            y1 = max(0, int(y1n * h))
-            x2 = min(w, int(x2n * w))
-            y2 = min(h, int(y2n * h))
+            # Undo letterbox: (norm * INPUT_SIZE - pad) / scale → original pixel
+            x1 = max(0, int((x1n * _INPUT_SIZE - pad_x) / scale))
+            y1 = max(0, int((y1n * _INPUT_SIZE - pad_y) / scale))
+            x2 = min(w, int((x2n * _INPUT_SIZE - pad_x) / scale))
+            y2 = min(h, int((y2n * _INPUT_SIZE - pad_y) / scale))
 
             if (x2 - x1) < self._min_face_size_px or (y2 - y1) < self._min_face_size_px:
                 continue
@@ -175,8 +176,9 @@ class FaceDetector:
             kps = []
             for k in range(6):
                 ky, kx = kps_all[i, k]
-                kps.append((min(w - 1, max(0, int(kx * w))),
-                            min(h - 1, max(0, int(ky * h)))))
+                kx_px = min(w - 1, max(0, int((kx * _INPUT_SIZE - pad_x) / scale)))
+                ky_px = min(h - 1, max(0, int((ky * _INPUT_SIZE - pad_y) / scale)))
+                kps.append((kx_px, ky_px))
 
             detections.append(Detection(x1=x1, y1=y1, x2=x2, y2=y2,
                                         score=float(scores[i]), keypoints=kps))
@@ -192,12 +194,30 @@ class FaceDetector:
     # Private
     # ------------------------------------------------------------------
 
-    def _preprocess(self, frame: np.ndarray) -> np.ndarray:
+    def _preprocess(self, frame: np.ndarray) -> tuple:
+        """
+        Letterbox-resize to _INPUT_SIZE × _INPUT_SIZE preserving aspect ratio.
+        Returns (tensor, scale, pad_x, pad_y) so detect() can invert the transform.
+
+        Without letterboxing, a portrait photo squashed to 128×128 makes faces look
+        wider than they are — BlazeFace's spatial priors break and keypoints shift.
+        """
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        resized = cv2.resize(rgb, (_INPUT_SIZE, _INPUT_SIZE))
-        arr = resized.astype(np.float32)
-        arr = (arr - 127.5) / 127.5     # normalize to [-1, 1]
-        return np.expand_dims(arr, axis=0)
+        h, w = rgb.shape[:2]
+
+        scale = _INPUT_SIZE / max(h, w)
+        nw, nh = int(w * scale), int(h * scale)
+        resized = cv2.resize(rgb, (nw, nh))
+
+        pad_x = (_INPUT_SIZE - nw) // 2
+        pad_y = (_INPUT_SIZE - nh) // 2
+
+        canvas = np.zeros((_INPUT_SIZE, _INPUT_SIZE, 3), dtype=np.uint8)
+        canvas[pad_y:pad_y + nh, pad_x:pad_x + nw] = resized
+
+        arr = canvas.astype(np.float32)
+        arr = (arr - 127.5) / 127.5
+        return np.expand_dims(arr, axis=0), scale, pad_x, pad_y
 
     def _build_anchors(self) -> np.ndarray:
         """

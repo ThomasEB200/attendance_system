@@ -1,9 +1,22 @@
 # Install: pip install -r requirements.txt
-# Note: opencv và picamera2 cài riêng qua apt (xem flow bên dưới)
+#
+# opencv-python và picamera2 cài riêng:
+#   sudo apt install python3-opencv python3-picamera2
+#
+# firebase-admin chỉ cần khi dùng sync.provider: firebase:
+#   pip install firebase-admin
 
-ai-edge-litert     # TFLite runtime cho Python 3.11+ trên ARM64
-flask>=3.0
+# --- core inference ---
+ai-edge-litert          # TFLite runtime (Python 3.11+, ARM64)
 numpy>=1.26
 Pillow>=10.0
+
+# --- web stream ---
+flask>=3.0
+
+# --- config / utils ---
 pyyaml>=6.0
 requests>=2.31
+
+# --- firebase sync (optional, Phase 2) ---
+firebase-admin>=6.0

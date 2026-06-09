@@ -33,8 +33,24 @@ recognition:
   model_path: "recognition/models/face_embedding.tflite"
   known_faces_dir: "data/known_faces"
   embeddings_path: "data/embeddings.pkl"
-  similarity_threshold: 0.5
+  similarity_threshold: 0.55
   low_confidence_threshold: 0.4
+
+sync:
+  enabled: true
+  # provider: local    — reads data/employees.yaml + data/employee_source/ (dev/testing)
+  # provider: firebase — reads Firestore, photo stored as base64 data URI
+  provider: firebase     # firebase/local
+  local:
+    employees_config: "employees.yaml"  # relative to data/
+    source_dir: "employee_source"       # relative to data/; put reference photos here
+  firebase:
+    # Service account key: Firebase Console → Project Settings → Service accounts → Generate new private key
+    credentials: "firebase_credentials.json"  # relative to attendance_system/
+
+attendance:
+  reset_hour: 5     # reset tất cả về "absent" lúc reset_hour:reset_minute mỗi ngày
+  reset_minute: 0   # ví dụ reset_hour: 17, reset_minute: 13 → 17:13
 
 debug:
   show_window: true
@@ -46,7 +62,7 @@ debug:
 # Only active on Raspberry Pi where spidev + RPi.GPIO are available.
 # Set enabled: false when developing on PC.
 tft:
-  enabled: false            # true on Pi with TFT wired up
+  enabled: true             # true on Pi with TFT wired up
   dc_pin:  25               # BCM GPIO for DC/RS line   (physical pin 22)
   rst_pin: 27               # BCM GPIO for hardware RST (physical pin 13)
   bl_pin:  18               # BCM GPIO for backlight    (physical pin 12)

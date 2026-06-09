@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 class MatchResult:
     name: str
     confidence: float
-    matched: bool   # False when confidence < threshold or DB is empty
+    matched: bool        # False when confidence < threshold or DB is empty
+    employee_id: str = ""  # empty string when not matched
 
 
 class FaceDB:
@@ -58,20 +59,24 @@ class FaceDB:
             logger.warning("FaceDB is empty — enroll at least one person first")
             return MatchResult(name=self.UNKNOWN, confidence=0.0, matched=False)
 
+        best_id   = ""
         best_name = self.UNKNOWN
         best_score = 0.0
 
-        for entry in self._db.values():
+        for employee_id, entry in self._db.items():
             score = float(np.dot(embedding, entry["embedding"]))   # cosine similarity
             if score > best_score:
                 best_score = score
-                best_name = entry["name"]
+                best_name  = entry["name"]
+                best_id    = employee_id
 
         matched = best_score >= self._threshold
-        if not matched:
-            best_name = self.UNKNOWN
-
-        return MatchResult(name=best_name, confidence=round(best_score, 3), matched=matched)
+        return MatchResult(
+            name=best_name if matched else self.UNKNOWN,
+            confidence=round(best_score, 3),
+            matched=matched,
+            employee_id=best_id if matched else "",
+        )
 
     def add_person(self, employee_id: str, name: str, embedding: np.ndarray) -> None:
         """Add or overwrite a person's reference embedding."""
@@ -93,6 +98,11 @@ class FaceDB:
 
     def is_empty(self) -> bool:
         return len(self._db) == 0
+
+    def clear(self) -> None:
+        """Remove all entries from the in-memory DB. Does not write to disk."""
+        self._db.clear()
+        logger.debug("FaceDB cleared (in-memory only)")
 
     def reload(self) -> None:
         """Re-read faces.pkl from disk (e.g., after a new enrollment)."""

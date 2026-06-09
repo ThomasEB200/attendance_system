@@ -21,7 +21,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import yaml
-from PIL import Image, ExifTags
 
 # Allow running from attendance_system/ or attendance_system/scripts/
 _ROOT = Path(__file__).resolve().parent.parent
@@ -31,6 +30,7 @@ from detection.face_detector import FaceDetector
 from recognition.face_recognizer import FaceRecognizer
 from recognition.face_db import FaceDB
 from utils.image_enhancer import ImageEnhancer
+from utils.image_utils import load_image_bgr
 from utils.logger import setup_logger
 
 logger = logging.getLogger(__name__)
@@ -40,25 +40,6 @@ def load_config(config_path: Path) -> dict:
     with open(config_path) as f:
         return yaml.safe_load(f)
 
-
-def load_image_exif(path: str) -> np.ndarray:
-    """Load image applying EXIF rotation — phone photos are often stored rotated."""
-    pil_img = Image.open(path).convert("RGB")
-    try:
-        exif = pil_img._getexif()
-        if exif:
-            for tag, value in exif.items():
-                if ExifTags.TAGS.get(tag) == "Orientation":
-                    if value == 3:
-                        pil_img = pil_img.rotate(180, expand=True)
-                    elif value == 6:
-                        pil_img = pil_img.rotate(270, expand=True)
-                    elif value == 8:
-                        pil_img = pil_img.rotate(90, expand=True)
-                    break
-    except Exception:
-        pass
-    return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
 
 def capture_from_camera(cfg: dict) -> np.ndarray | None:
@@ -163,7 +144,7 @@ def main() -> None:
         if not img_path.exists():
             logger.error("Image not found: %s", img_path)
             sys.exit(1)
-        frame = load_image_exif(str(img_path))
+        frame = load_image_bgr(str(img_path))
         if frame is None:
             logger.error("Cannot read image: %s", img_path)
             sys.exit(1)
