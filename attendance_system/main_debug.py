@@ -171,7 +171,7 @@ def pipeline_loop(
                     result.name, result.confidence, result.matched, det_ms, recog_ms,
                 )
                 if result.matched and attendance_logger is not None:
-                    attendance_logger.record_present(result.employee_id, result.name)
+                    attendance_logger.record_present(result.employee_id, result.name, frame)
             else:
                 result = None
 
@@ -335,6 +335,7 @@ def main() -> None:
     )
     attendance_logger = AttendanceLogger(
         credentials_path=str(cred_path) if cred_path.exists() else None,
+        photos_dir=str(root / "data" / "attendance_photos"),
     )
     att_cfg = cfg.get("attendance", {})
     stop_event = threading.Event()

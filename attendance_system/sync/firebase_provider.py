@@ -50,7 +50,7 @@ class FirebaseProvider(BaseProvider):
 
         for doc in docs:
             data = doc.to_dict()
-            employee_id = data.get("employeeId", doc.id)
+            employee_id = doc.id   # document ID is the authoritative key
             name = data.get("fullName", "")
             photo_b64 = data.get("photo", "")
 
