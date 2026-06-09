@@ -13,6 +13,7 @@ Run from attendance_system/:
 import logging
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 import cv2
@@ -42,6 +43,13 @@ _COLOR_LOW_CONF = (0, 165, 255)   # orange
 _FONT       = cv2.FONT_HERSHEY_SIMPLEX
 _FONT_SCALE = 0.55
 _THICKNESS  = 1
+
+
+def _strip_diacritics(text: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text)
+        if unicodedata.category(c) != "Mn"
+    )
 
 # Shared state: pipeline thread writes, output threads read
 _frame_lock   = threading.Lock()
@@ -178,13 +186,13 @@ def pipeline_loop(
             if result is None:
                 draw_bbox(annotated, det, _COLOR_STABLE, f"Stable {stable_count}/{stable_required}")
             elif result.matched:
-                draw_bbox(annotated, det, _COLOR_MATCH, f"{result.name} {result.confidence:.0%}")
+                draw_bbox(annotated, det, _COLOR_MATCH, _strip_diacritics(result.name))
             else:
                 color = _COLOR_LOW_CONF if result.confidence >= low_conf_thresh else _COLOR_UNKNOWN
                 draw_bbox(annotated, det, color, f"Unknown ({result.confidence:.0%})")
 
             if result and result.matched:
-                draw_status_bar(annotated, f"MATCH: {result.name}", _COLOR_MATCH)
+                draw_status_bar(annotated, _strip_diacritics(result.name), _COLOR_MATCH)
             elif result:
                 draw_status_bar(annotated, "No match", _COLOR_UNKNOWN)
             else:
