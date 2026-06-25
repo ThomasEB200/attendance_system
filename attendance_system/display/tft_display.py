@@ -28,7 +28,7 @@ if str(_TFT_LIB_ROOT) not in sys.path:
 
 _TFT_AVAILABLE = False
 try:
-    from tft_lib import ILI9225
+    from tft_lib import ST7735
     from tft_lib.stream import StreamDisplay
     _TFT_AVAILABLE = True
 except ImportError:
@@ -42,7 +42,7 @@ def is_available() -> bool:
 
 class TFTDisplay:
     """
-    Thin wrapper around ILI9225 + StreamDisplay for live BGR frame streaming.
+    Thin wrapper around ST7735 + StreamDisplay for live BGR frame streaming.
 
     Raises RuntimeError on construction when the required hardware libraries
     (spidev, RPi.GPIO) are not present — the caller can catch this to disable
@@ -61,7 +61,7 @@ class TFTDisplay:
             raise RuntimeError(
                 "tft_lib requires spidev + RPi.GPIO — only available on Raspberry Pi"
             )
-        self._tft = ILI9225(
+        self._tft = ST7735(
             dc_pin=dc_pin, rst_pin=rst_pin, bl_pin=bl_pin, spi_speed=spi_speed
         )
         self._sd = StreamDisplay(self._tft, scale_mode=scale_mode)
@@ -148,7 +148,7 @@ def tft_stream_loop(
             continue
 
         try:
-            tft.push_rgb(frame)  # BGR pipeline → RGB for display
+            tft.push_bgr(frame)  # BGR pipeline → RGB for display
         except Exception:
             logger.exception("TFT push error")
 

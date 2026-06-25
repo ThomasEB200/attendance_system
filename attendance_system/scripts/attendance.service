@@ -1,0 +1,16 @@
+[Unit]
+Description=Attendance System (face recognition)
+After=network.target
+
+[Service]
+Type=simple
+User=pi-zero
+WorkingDirectory=/home/pi-zero/attendance_system
+ExecStart=/home/pi-zero/attendance_system/.venv/bin/python main_debug.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

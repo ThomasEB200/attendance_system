@@ -11,10 +11,12 @@ Quick start:
 """
 
 from .ili9225 import ILI9225, PORTRAIT_0, LANDSCAPE_90, PORTRAIT_180, LANDSCAPE_270
+from .st7735 import ST7735
 from . import colors, fonts, graphics, text, stream
 
 __all__ = [
     "ILI9225",
+    "ST7735",
     "PORTRAIT_0", "LANDSCAPE_90", "PORTRAIT_180", "LANDSCAPE_270",
     "colors",
     "fonts",
