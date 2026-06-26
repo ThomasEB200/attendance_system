@@ -6,9 +6,12 @@
 # firebase-admin chỉ cần khi dùng sync.provider: firebase:
 #   pip install firebase-admin
 
+spidev>=3.5          # Linux kernel SPI interface
+RPi.GPIO>=0.7.1      # GPIO control (pre-installed on Raspbian)
+
 # --- core inference ---
 ai-edge-litert          # TFLite runtime (Python 3.11+, ARM64)
-numpy>=1.26
+numpy>=1.26,<2.0.0
 Pillow>=10.0
 
 # --- web stream ---
